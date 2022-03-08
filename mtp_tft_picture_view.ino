@@ -1068,10 +1068,12 @@ void bmpDraw(File &bmpFile, const char *filename, bool fErase) {
               r = sdbuffer[buffidx++];
               pusRow[col] = Color565(r, g, b);
             }  // end pixel
-            if (g_image_scale == 1) {
+            if (g_image_scale_up) {
+              ScaleUpWriteClippedRect(row, image_width, usPixels);
+            }else if (g_image_scale == 1) {
               writeClippedRect(0, row, image_width, 1, pusRow);
             } else {
-              ScaleWriteClippedRect(row, image_width, usPixels);
+              ScaleDownWriteClippedRect(row, image_width, usPixels);
             }
           }                // end scanline
           free(usPixels);  // free it after we are done
@@ -1228,83 +1230,83 @@ void WaitforWRComplete() {
 #endif
 
 // Function to draw pixels to the display
-void ScaleWriteClippedRect(int row, int image_width, uint16_t *usPixels) {
-  // this method assumes you are writing the data into the proper spots in Image_width*CLIP_LINES rectangle
-  if (g_image_scale_up) {
-    //--------------------------------------------------------------------
-    // experiment scale up...
-    //--------------------------------------------------------------------
-    uint16_t *usRowOut = usPixels + 2 * image_width;  //
-    uint8_t r_cur, r_prev, g_cur, g_prev, b_cur, b_prev;
-    int red, green, blue;
-    int image_width_out = (image_width - 1) * g_image_scale_up + 1;  // we don't fill out the last one.
-    // if this is not our first row, then we need to compute the fill in row
-    // first...
-    // Our buffer has g_image_scale_up rows of data to send in one chunk
-    uint16_t *puCol = usRowOut;
-    uint16_t *puCurRow;
-    uint16_t *puPrevRow;
-    if (row & 1) {
-      puCurRow = usPixels + image_width;
-      puPrevRow = usPixels;
-    } else {
-      puCurRow = usPixels;
-      puPrevRow = usPixels + image_width;
-    }
+void ScaleUpWriteClippedRect(int row, int image_width, uint16_t *usPixels) {
+  //--------------------------------------------------------------------
+  // experiment scale up...
+  //--------------------------------------------------------------------
+  uint16_t *usRowOut = usPixels + 2 * image_width;  //
+  uint8_t r_cur, r_prev, g_cur, g_prev, b_cur, b_prev;
+  int red, green, blue;
+  int image_width_out = (image_width - 1) * g_image_scale_up + 1;  // we don't fill out the last one.
+  // if this is not our first row, then we need to compute the fill in row
+  // first...
+  // Our buffer has g_image_scale_up rows of data to send in one chunk
+  uint16_t *puCol = usRowOut;
+  uint16_t *puCurRow;
+  uint16_t *puPrevRow;
+  if (row & 1) {
+    puCurRow = usPixels + image_width;
+    puPrevRow = usPixels;
+  } else {
+    puCurRow = usPixels;
+    puPrevRow = usPixels + image_width;
+  }
 
-    // First lets generate the one for the actual row;
-    uint16_t *p = usRowOut + image_width_out * (g_image_scale_up - 1);
-    uint16_t *ppixIn = puCurRow;
-    for(int col = 0; col < image_width; col++) {
-      // bug bug.. could be faster
-      *p = *ppixIn++;  // copy the pixel in to pixel out
-      if (col) {
-        // Now lets fill in the columns between the prev and new...
-        Color565ToRGB(*p, r_cur, g_cur, b_cur);
-        Color565ToRGB(*(p - g_image_scale_up), r_prev, g_prev, b_prev);
-        for (int j = 1; j < g_image_scale_up; j++) {
-          red = r_prev + ((r_cur - r_prev) * j) / g_image_scale_up;
-          green = g_prev + ((g_cur - g_prev) * j) / g_image_scale_up;
-          blue = b_prev + ((b_cur - b_prev) * j) / g_image_scale_up;
-          *(p - g_image_scale_up + j) = Color565(red, green, blue);
-        }
+  // First lets generate the one for the actual row;
+  uint16_t *p = usRowOut + image_width_out * (g_image_scale_up - 1);
+  uint16_t *ppixIn = puCurRow;
+  for(int col = 0; col < image_width; col++) {
+    // bug bug.. could be faster
+    *p = *ppixIn++;  // copy the pixel in to pixel out
+    if (col) {
+      // Now lets fill in the columns between the prev and new...
+      Color565ToRGB(*p, r_cur, g_cur, b_cur);
+      Color565ToRGB(*(p - g_image_scale_up), r_prev, g_prev, b_prev);
+      for (int j = 1; j < g_image_scale_up; j++) {
+        red = r_prev + ((r_cur - r_prev) * j) / g_image_scale_up;
+        green = g_prev + ((g_cur - g_prev) * j) / g_image_scale_up;
+        blue = b_prev + ((b_cur - b_prev) * j) / g_image_scale_up;
+        *(p - g_image_scale_up + j) = Color565(red, green, blue);
       }
-      p += g_image_scale_up;
     }
+    p += g_image_scale_up;
+  }
 
-    // except for the first row we now need to fill in the extra rows from the previous one
-    if (row) {
-      for (int col = 0; col < image_width; col++) {
-        Color565ToRGB(*puCurRow, r_cur, g_cur, b_cur);
-        Color565ToRGB(*puPrevRow, r_prev, g_prev, b_prev);
-        for (int i = 1; i < g_image_scale_up; i++) {
-          uint16_t *p = puCol + (i - 1) * image_width_out;  // so location for this item
-          int red = r_prev + ((r_cur - r_prev) * i) / g_image_scale_up;
-          int green = g_prev + ((g_cur - g_prev) * i) / g_image_scale_up;
-          int blue = b_prev + ((b_cur - b_prev) * i) / g_image_scale_up;
-          *p = Color565(red, green, blue);
-          // need to compute middle ones as well.
-          if (col) {
-            // Now lets fill in the columns between the prev and new...
-            Color565ToRGB(*p, r_cur, g_cur, b_cur);
-            Color565ToRGB(*(p - g_image_scale_up), r_prev, g_prev, b_prev);
-            for (int j = 1; j < g_image_scale_up; j++) {
-              red = r_prev + ((r_cur - r_prev) * j) / g_image_scale_up;
-              green = g_prev + ((g_cur - g_prev) * j) / g_image_scale_up;
-              blue = b_prev + ((b_cur - b_prev) * j) / g_image_scale_up;
-              *(p - g_image_scale_up + j) = Color565(red, green, blue);
-            }
+  // except for the first row we now need to fill in the extra rows from the previous one
+  if (row) {
+    for (int col = 0; col < image_width; col++) {
+      Color565ToRGB(*puCurRow, r_cur, g_cur, b_cur);
+      Color565ToRGB(*puPrevRow, r_prev, g_prev, b_prev);
+      for (int i = 1; i < g_image_scale_up; i++) {
+        uint16_t *p = puCol + (i - 1) * image_width_out;  // so location for this item
+        int red = r_prev + ((r_cur - r_prev) * i) / g_image_scale_up;
+        int green = g_prev + ((g_cur - g_prev) * i) / g_image_scale_up;
+        int blue = b_prev + ((b_cur - b_prev) * i) / g_image_scale_up;
+        *p = Color565(red, green, blue);
+        // need to compute middle ones as well.
+        if (col) {
+          // Now lets fill in the columns between the prev and new...
+          Color565ToRGB(*p, r_cur, g_cur, b_cur);
+          Color565ToRGB(*(p - g_image_scale_up), r_prev, g_prev, b_prev);
+          for (int j = 1; j < g_image_scale_up; j++) {
+            red = r_prev + ((r_cur - r_prev) * j) / g_image_scale_up;
+            green = g_prev + ((g_cur - g_prev) * j) / g_image_scale_up;
+            blue = b_prev + ((b_cur - b_prev) * j) / g_image_scale_up;
+            *(p - g_image_scale_up + j) = Color565(red, green, blue);
           }
         }
-        puCol += g_image_scale_up;
       }
-      writeClippedRect(0, 1 + (row - 1) * g_image_scale_up, image_width_out, g_image_scale_up, usRowOut);
-    } else {     
-    // first row just output it's own data.
-        writeClippedRect(0, 0, image_width_out, 1, usRowOut + image_width_out * (g_image_scale_up - 1));
+      puCol += g_image_scale_up;
     }
-  
-  } else if ((row % g_image_scale) == (g_image_scale -1)) {
+    writeClippedRect(0, 1 + (row - 1) * g_image_scale_up, image_width_out, g_image_scale_up, usRowOut);
+  } else {     
+  // first row just output it's own data.
+    writeClippedRect(0, 0, image_width_out, 1, usRowOut + image_width_out * (g_image_scale_up - 1));
+  }
+}  
+
+void ScaleDownWriteClippedRect(int row, int image_width, uint16_t *usPixels) {
+  if ((row % g_image_scale) == (g_image_scale -1)) {
       //--------------------------------------------------------------------
       // else scale down
       //--------------------------------------------------------------------
@@ -1444,7 +1446,7 @@ void ScaleWriteClippedRect(int row, int image_width, uint16_t *usPixels) {
     if (rc == PNG_SUCCESS) {
       g_image_width = png.getWidth();
       g_image_height = png.getHeight();
-      uint8_t g_image_scale_up = 0;
+      g_image_scale_up = 0;
 
       g_image_scale = 1;  // default...
       Serial.printf("image specs: (%d x %d), %d bpp, pixel type: %d\n", g_image_width, g_image_height, png.getBpp(), png.getPixelType());
@@ -1517,7 +1519,7 @@ void ScaleWriteClippedRect(int row, int image_width, uint16_t *usPixels) {
     } else {
       uint16_t *pusRow = usPixels + pDraw->iWidth * (pDraw->y % g_image_scale);
       png.getLineAsRGB565(pDraw, pusRow, PNG_RGB565_LITTLE_ENDIAN, 0xffffffff);
-      ScaleWriteClippedRect(pDraw->y, pDraw->iWidth, usPixels);
+      ScaleDownWriteClippedRect(pDraw->y, pDraw->iWidth, usPixels);
     }
   }
 
