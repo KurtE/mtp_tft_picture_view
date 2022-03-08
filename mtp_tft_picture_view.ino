@@ -1263,9 +1263,9 @@ void ScaleUpWriteClippedRect(int row, int image_width, uint16_t *usPixels) {
       Color565ToRGB(*p, r_cur, g_cur, b_cur);
       Color565ToRGB(*(p - g_image_scale_up), r_prev, g_prev, b_prev);
       for (int j = 1; j < g_image_scale_up; j++) {
-        red = r_prev + ((r_cur - r_prev) * j) / g_image_scale_up;
-        green = g_prev + ((g_cur - g_prev) * j) / g_image_scale_up;
-        blue = b_prev + ((b_cur - b_prev) * j) / g_image_scale_up;
+        red = (int)r_prev + (((int)r_cur - (int)r_prev) * j) / g_image_scale_up;
+        green = (int)g_prev + (((int)g_cur - (int)g_prev) * j) / g_image_scale_up;
+        blue = (int)b_prev + (((int)b_cur - (int)b_prev) * j) / g_image_scale_up;
         *(p - g_image_scale_up + j) = Color565(red, green, blue);
       }
     }
@@ -1275,13 +1275,13 @@ void ScaleUpWriteClippedRect(int row, int image_width, uint16_t *usPixels) {
   // except for the first row we now need to fill in the extra rows from the previous one
   if (row) {
     for (int col = 0; col < image_width; col++) {
-      Color565ToRGB(*puCurRow, r_cur, g_cur, b_cur);
-      Color565ToRGB(*puPrevRow, r_prev, g_prev, b_prev);
+      Color565ToRGB(*puCurRow++, r_cur, g_cur, b_cur);
+      Color565ToRGB(*puPrevRow++, r_prev, g_prev, b_prev);
       for (int i = 1; i < g_image_scale_up; i++) {
         uint16_t *p = puCol + (i - 1) * image_width_out;  // so location for this item
-        int red = r_prev + ((r_cur - r_prev) * i) / g_image_scale_up;
-        int green = g_prev + ((g_cur - g_prev) * i) / g_image_scale_up;
-        int blue = b_prev + ((b_cur - b_prev) * i) / g_image_scale_up;
+        int red = (int)r_prev + (((int)r_cur - (int)r_prev) * i) / g_image_scale_up;
+        int green = (int)g_prev + (((int)g_cur - (int)g_prev) * i) / g_image_scale_up;
+        int blue = (int)b_prev + (((int)b_cur - (int)b_prev) * i) / g_image_scale_up;
         *p = Color565(red, green, blue);
         // need to compute middle ones as well.
         if (col) {
@@ -1289,9 +1289,9 @@ void ScaleUpWriteClippedRect(int row, int image_width, uint16_t *usPixels) {
           Color565ToRGB(*p, r_cur, g_cur, b_cur);
           Color565ToRGB(*(p - g_image_scale_up), r_prev, g_prev, b_prev);
           for (int j = 1; j < g_image_scale_up; j++) {
-            red = r_prev + ((r_cur - r_prev) * j) / g_image_scale_up;
-            green = g_prev + ((g_cur - g_prev) * j) / g_image_scale_up;
-            blue = b_prev + ((b_cur - b_prev) * j) / g_image_scale_up;
+            red = (int)r_prev + (((int)r_cur - (int)r_prev) * j) / g_image_scale_up;
+            green = (int)g_prev + (((int)g_cur - (int)g_prev) * j) / g_image_scale_up;
+            blue = (int)b_prev + (((int)b_cur - (int)b_prev) * j) / g_image_scale_up;
             *(p - g_image_scale_up + j) = Color565(red, green, blue);
           }
         }
