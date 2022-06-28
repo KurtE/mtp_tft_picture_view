@@ -14,8 +14,8 @@ rem
 rem Edit these paths:
 
 set arduino=C:\arduino-1.8.19
-set TyTools=C:\Program Files\TyQt
-rem set TyTools=D:\GitHub\tytools\build\win64\Release
+rem set TyTools=C:\Program Files\TyQt
+set TyTools=D:\GitHub\tytools\build\win64\Release
 set libs=C:\Users\kurte\Documents\Arduino\libraries
 set tools=D:\GitHub\Tset
 REM Pick a TEMP folder IF not the Windows Default folder - remove REM
@@ -31,7 +31,7 @@ REM defragster was here
 set model=teensy41
 set speed=600
 set opt=o2std
-set usb=mtpserial
+set usb=serialmtp
 cd.
 set sketchcmd=~
 

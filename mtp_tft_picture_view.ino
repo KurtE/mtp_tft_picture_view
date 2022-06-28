@@ -1,9 +1,24 @@
 //=============================================================================
-// Simple image (BMP optional JPEG and PNG) display program with MTP support added.
+// Simple image (BMP optional JPEG and PNG) display progm with MTP support added.
 //=============================================================================
 #include <SPI.h>
+#include <FS.h>
 #include <SD.h>
+
+// Also allow this sketch to work regardless if we decide to use MTP or not
+#if defined(USB_MTPDISK) || defined(USB_MTPDISK_SERIAL)
+// If user selected a USB type that includes MTP, then set it up
 #include <MTP_Teensy.h>
+#endif
+
+#ifdef MTP_TEENSY_H
+#define mtp_loop MTP.loop()
+
+#else
+#pragma message "Note Built without MTP support"
+#define MTP_MAX_FILENAME_LEN 256
+#define mtp_loop
+#endif
 
 //#define USE_SPI_LITTLEFS
 
@@ -56,7 +71,7 @@
 
 //Optional support for RA8876
 #define USE_KURTS_2ND_BOARD
-#include <FT5206.h>
+//#include <FT5206.h>
 #include <RA8876_t3.h>
 
 
@@ -200,10 +215,22 @@ ST7789_t3 tft = ST7789_t3(TFT_CS, TFT_DC, TFT_RST);
 // RA8875
 //-----------------------------------------------------------------------------
 #if defined(_RA8875MC_H_)
+
+#if defined(USE_KURTS_2ND_BOARD)
+#undef TFT_DC
+#undef TFT_CS
+#undef TFT_RST
+//#define TFT_DC 30
+#define TFT_CS 30
+#define TFT_RST 28
+
+#define RA8875_INT 6
+#else
 #undef TFT_RST
 #define TFT_RST 9
 // RA8875 capacitive IRQ
 #define RA8875_INT 6
+#endif
 #define MAXTOUCHLIMIT 1  //1...5
 
 // define begin options
@@ -331,14 +358,26 @@ uint8_t g_image_scale = 1;
 uint8_t g_image_scale_up = 0;
 uint32_t g_WRCount = 0;  // debug count how many time writeRect called
 
+//==========================================================================
+// Helper functions to handle if we have MTP or not
+//==========================================================================
+inline uint32_t mtp_addFilesystem(FS &disk, const char *diskname) {
+  #ifdef MTP_TEENSY_H
+  return MTP.addFilesystem(disk, diskname);
+  #else
+  return 0xfffffffful;
+  #endif
+}
+
 
 //****************************************************************************
 // Setup
 //****************************************************************************
 void setup(void) {
   // mandatory to begin the MTP session.
+  #ifdef MTP_TEENSY_H
   MTP.begin();
-
+  #endif
   // Keep the SD card inactive while working the display.
   pinMode(SD_CS, INPUT_PULLUP);
   delay(20);
@@ -412,13 +451,15 @@ void setup(void) {
 
 #elif defined(_RA8875MC_H_)
   //  begin display: Choose from: RA8875_480x272, RA8875_800x480, RA8875_800x480ALT, Adafruit_480x272, Adafruit_800x480
+  Serial.printf("RA8875 Begin: CS:%u RST:%u\n", TFT_CS, TFT_RST);
   tft.begin(TFT_RA8875_BEGIN_MODE, TFT_RA8875_BEGIN_COLORS_BPP, TFT_RA8875_BEGIN_SPI_SPEED);
   tft.setRotation(0);
 
 #if defined(RA8875_USE_LAYERS)
-#endif  //tft.GPIOX(true);      // Enable TFT - display enable tied to GPIOX
-  //tft.PWM1config(true, RA8875_PWM_CLK_DIV1024); // PWM output for backlight
-  //tft.PWM1out(255);
+#endif  
+tft.GPIOX(true);      // Enable TFT - display enable tied to GPIOX
+//tft.PWM1config(true, RA8875_PWM_CLK_DIV1024); // PWM output for backlight
+//tft.PWM1out(255);
 
 
 #if defined(RA8875_INT) && defined(USE_FT5206_TOUCH)
@@ -438,7 +479,7 @@ void setup(void) {
   pinMode(TFT_BL, OUTPUT);
   digitalWrite(TFT_BL, HIGH);
 #endif
-  tft.begin();
+  tft.begin(2000000);
 
 #ifdef RA8876_INT
   tft.useCapINT(RA8876_INT, RA8876_CTPRST);  //we use the capacitive chip Interrupt out!
@@ -484,7 +525,7 @@ void setup(void) {
 #if defined(USE_SPI_LITTLEFS)
   for (uint8_t i = 0; i < (sizeof(lfs_spi_list) / sizeof(lfs_spi_list[0])); i++) {
     if (lfs_spi_list[i].begin()) {
-      MTP.addFilesystem(*lfs_spi_list[i].fs(), lfs_spi_list[i].displayName());
+      mtp_addFilesystem(*lfs_spi_list[i].fs(), lfs_spi_list[i].displayName());
     } else {
       Serial.printf("Storage not added for pin %d\n", i);
     }
@@ -499,7 +540,7 @@ void setup(void) {
       delay(2000);
     }
   }
-  MTP.addFilesystem(SD, "SD Card");
+  mtp_addFilesystem(SD, "SD Card");
 
 
   //Serial.begin(9600);
@@ -553,7 +594,7 @@ void setup(void) {
 // loop
 //****************************************************************************
 void loop() {
-  MTP.loop();
+  mtp_loop;
   ProcessTouchScreen();
 // don't process unless time elapsed or g_fast_mode
 // Timing may depend on which type of display we are using...
@@ -670,7 +711,7 @@ void loop() {
     if (g_stepMode) {
       int ch;
       Serial.printf("Step Mode: enter anything to continue");
-      while ((ch = Serial.read()) == -1) MTP.loop();  // in case at startup...
+      while ((ch = Serial.read()) == -1) mtp_loop;  // in case at startup...
       while (ch != -1) {
         if (ch == 'd') g_debug_output = !g_debug_output;
         if (ch == 's') g_stepMode = !g_stepMode;
@@ -684,7 +725,7 @@ void loop() {
       while (Serial.read() != -1)
         ;
       Serial.printf("Paused: enter anything to continue");
-      while ((ch = Serial.read()) == -1) MTP.loop();
+      while ((ch = Serial.read()) == -1) mtp_loop;
       while (ch != -1) {
         if (ch == 'd') g_debug_output = !g_debug_output;
         if (ch == 's') g_stepMode = !g_stepMode;
